@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>寻宝游戏</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            height: 100%;
+            right: 0;
+            background-image: url(cangbaotu.jpg);
+        }
+
+        .history {
+            display: block;
+            white-space: pre;
+        }
+
+        #gameHistory {
+            position: absolute;
+            right: 10px;
+            top: 0px;
+            width: 400px;
+            height: 400px;
+            white-space: pre;
+        }
+
+        #scene {
+            position: absolute;
+            width: 375px;
+            height: 300px;
+            top: 0;
+            left: 500px;
+            overflow: hidden;
+            transition: opacity 0.8s ease;
+        }
+
+        #character {
+            position: absolute;
+            width: 100px;
+            height: 100px;
+            border-bottom: 7px dashed blue;
+            top: 310px;
+            left: 630px;
+            background-blend-mode: multiply;
+            background: url('people.png') no-repeat;
+        }
+
+        @keyframes walk {
+            0% {
+                background-position: 0 0;
+            }
+
+            100% {
+                background-position: -800px 0;
+            }
+        }
+
+        .character-walk {
+            animation: walk 1.5s steps(8) infinite;
+        }
+
+        #output {
+            position: absolute;
+            top: 427px;
+            left: 0;
+            bottom: 0;
+            overflow-y: auto;
+            font-size: 20px;
+            width: 100%;
+            text-align: center;
+            background-repeat: no-repeat;
+
+        }
+
+        .giant {
+            position: absolute;
+            top: 80px;
+            left: 670px;
+            width: 200px;
+            height: 200px;
+            background-image: url('giant.png');
+            background-repeat: no-repeat;
+            display: none;
+            z-index: 10;
+            animation: appear 2s forwards;
+        }
+
+        @keyframes appear {
+            0% {
+                transform: translateX(-50%) scale(0);
+            }
+
+            100% {
+                transform: translateX(-50%) scale(1);
+            }
+        }
+
+        @keyframes shake {
+            0% {
+                transform: translate(1px, 0);
+            }
+
+            25% {
+                transform: translate(-1px, 0);
+            }
+
+            50% {
+                transform: translate(1px, 0);
+            }
+
+            75% {
+                transform: translate(-1px, 0);
+            }
+
+            100% {
+                transform: translate(0, 0);
+            }
+        }
+
+        .shake {
+            animation: shake 2s;
+        }
+
+        @keyframes glow {
+            0% {
+                filter: brightness(1);
+            }
+
+            100% {
+                filter: brightness(1.8);
+            }
+        }
+
+        .treasure-glow {
+            animation: glow 5s infinite;
+        }
+
+        #startButton {
+            background-image: url('cangbaotu.jpg');
+        }
+
+        .title {
+            position: absolute;
+            top: 10px;
+            left: 50px;
+            width: 200px;
+            height: 100px;
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+    <audio id="bgMusic" loop autoplay>
+        <source src="background.wav" type="audio/wav">
+        您的浏览器不支持音频播放。
+    </audio>
+    <div class="title">
+        <h1>寻宝游戏</h1>
+    </div>
+    <div id="gameHistory">
+    <h2>游戏历史</h2><p id="history"></p>
+    </div>
+
+    <div id="scene"> </div>
+    <div id="giant" class="giant" style="display: none;"></div>
+    <div id="treasure" class="treasure" style="display: none;"></div>
+    <div id="character"></div>
+    <div id="output">
+        <button id="startButton">开始游戏</button>
+    </div>
+
+    <script>
+        // 存储玩家信息  
+        function savePlayerInfo(playerId, nickname, history) {
+            const playerInfo = { playerId, nickname, history };
+            localStorage.setItem('playerInfo', JSON.stringify(playerInfo));
+        }
+
+        // 恢复玩家信息  
+        function restorePlayerInfo() {
+            const playerInfoStr = localStorage.getItem('playerInfo');
+            return playerInfoStr ? JSON.parse(playerInfoStr) : null;
+        }
+
+        // 显示游戏历史  
+        function showGameHistory(history) {
+            // 检查 history 是否为 undefined 或不是数组  
+            if (!Array.isArray(history)) {
+                history = []; // 如果不是数组，就设置为空数组  
+            }
+            const historyElement = document.getElementById('history');
+            historyElement.innerHTML = history.join('\n');;
+        }
+        // 检查并显示游戏历史  
+        function displayGameHistory() {
+            let playerInfo = restorePlayerInfo();
+            if (playerInfo && Array.isArray(playerInfo.history)) {
+                showGameHistory(playerInfo.history);
+            }
+        }
+
+        // 在页面加载完成后调用 displayGameHistory  
+        document.addEventListener('DOMContentLoaded', (event) => {
+            displayGameHistory();
+            loadGameData(); 
+        });
+        // 显示输出  
+        function showOutput(message) {
+            clearOutput();
+            const outputElement = document.getElementById('output');
+            outputElement.innerHTML += `<p>${message}</p>`;
+        }
+        async function loadGameData() {
+            try {
+                const response = await fetch('gameData.txt');
+                const data = await response.text();
+                const elements = data.split('\n\n');
+                const descriptions = {};
+                elements.forEach(element => {
+                    const [title, ...description] = element.split('：');
+                    descriptions[title.trim()] = description.join('：').trim();
+                });
+                // 示例: 您可以把描述存储到一个全局变量中，后面方便使用  
+                window.gameDescriptions = descriptions;
+                console.log(descriptions); // 查看数据  
+                showOutput(descriptions['图书馆']); // 初始显示图书馆描述  
+            } catch (error) {
+                console.error("加载数据失败:", error);
+                showOutput("加载数据失败: " + error);
+            }
+        }
+        // 模拟宝藏地图API  
+        class TreasureMap {
+            static getInitialClue() {
+                return new Promise((resolve) => {
+                    setTimeout(() => {
+                        resolve("发现了一个线索......");
+                    }, 3000);
+                });
+            }
+
+
+            static decodeAncientScript(clue) {
+                return new Promise((resolve, reject) => {
+                    setTimeout(() => {
+                        if (!clue) {
+                            reject("没有线索可以解码!");
+                        }
+                        resolve("解码成功!宝藏在一座古老的神庙中...");
+                    }, 2000);
+                });
+            }
+            static serachTemple() {
+                return new Promise((resolve) => {
+                    setTimeout(() => {
+                        resolve("找到一个神秘的入口...");
+                    }, 4000);
+                });
+            }
+            static incident(location) {
+                return new Promise((resolve, reject) => {
+                    setTimeout(() => {
+                        const random = Math.random();
+                        if (random < 0.5) {
+                            reject("糟糕!遇到了神庙守卫!");
+                        }
+                        resolve("继续深入寺庙");
+                    }, 2000);
+                });
+            }
+            static openTreasureBox() {
+                return new Promise((resolve) => {
+                    setTimeout(() => {
+                        resolve("恭喜!你找到了传说中的宝藏!");
+                    }, 3000);
+                });
+            }
+        }
+
+
+        // 使用 async/await 函数查找宝藏  
+        async function findTreasureWithAsyncAwait() {
+            const bgMusic = document.getElementById('bgMusic');
+            bgMusic.play();
+            let playerInfo = restorePlayerInfo();
+            if (!playerInfo) {
+                // 如果没有玩家信息，初始化一个新的玩家信息  
+                playerInfo = {
+                    playerId: 'player123', // 或者使用动态生成的唯一ID  
+                    nickname: '冒险家',
+                    history: []
+                };
+                savePlayerInfo(playerInfo.playerId, playerInfo.nickname, playerInfo.history);
+            }
+            if (!Array.isArray(playerInfo.history)) {
+                playerInfo.history = [];
+            }
+            // 显示游戏历史
+            showGameHistory(playerInfo.history);
+            try {
+                document.getElementById('character').classList.add('character-walk');
+                showOutput("开始寻宝...");
+                setTimeout(() => {
+                    showOutput("你身处于一个古老的图书馆中.......")
+                    document.getElementById('scene').style.backgroundImage = "url('library.jpg')";
+                }, 1000);
+
+                // 获取初始线索  
+                const clue = await TreasureMap.getInitialClue();
+                showOutput(clue);
+
+                // 解码古老的文字并更新场景  
+                const location = await TreasureMap.decodeAncientScript(clue);
+                showOutput(location);
+
+                // 更新场景为神庙背景  
+
+                setTimeout(() => {
+                    showOutput("前往神庙，寻找宝藏的线索...")
+                    document.getElementById('scene').style.backgroundImage = "url('temple1.jpg')";
+                }, 1000);
+
+
+                const enter = await TreasureMap.serachTemple();
+                showOutput(enter);
+                document.getElementById('scene').style.backgroundImage = "url('temple2.jpg')";
+
+                // 执行事件  
+                const box = await TreasureMap.incident(location);
+                showOutput(box);
+
+                // 找到宝箱并打开  
+                setTimeout(() => {
+                    showOutput("抵达了一个秘境")
+                    document.getElementById('scene').style.backgroundImage = "url('treasure1.jpg')";
+                }, 1000);
+                const treasure = await TreasureMap.openTreasureBox();
+                showOutput(treasure);
+                savePlayerInfo(playerInfo);
+
+                showGameHistory(playerInfo.history);
+
+                // 更新场景为宝藏背景  
+                const treasureBoxElement = document.getElementById('scene');
+                treasureBoxElement.style.background = "url('treasure2.jpg')";
+                treasureBoxElement.classList.add('treasure-glow');
+                document.getElementById('character').classList.remove('character-walk');
+                showOutput("任务完成! 你成为了传说中的探险家!");
+                playerInfo.history.push(`游戏${playerInfo.history.length + 1} - 任务成功!`);
+                savePlayerInfo(playerInfo.playerId, playerInfo.nickname, playerInfo.history);
+                showGameHistory(playerInfo.history);
+
+                bgMusic.pause();
+                bgMusic.src = 'success.wav'; // 替换为成功音乐文件  
+                bgMusic.play();
+
+            } catch (error) {
+                console.error("任务失败:", error);
+                showOutput("任务失败: " + error);
+
+                const characterElement = document.getElementById('character');
+                characterElement.classList.add('shake');
+
+                const giantElement = document.getElementById('giant');
+                giantElement.style.display = 'block';
+                giantElement.classList.add('appear');
+                setTimeout(() => {
+                    characterElement.classList.remove('shake');
+                }, 2000);
+                document.getElementById('character').classList.remove('character-walk');
+                playerInfo.history.push(`游戏${playerInfo.history.length + 1} - 任务失败! 失败原因：遇到神庙守卫`);
+                savePlayerInfo(playerInfo.playerId, playerInfo.nickname, playerInfo.history);
+                showGameHistory(playerInfo.history);
+                bgMusic.pause();
+                bgMusic.src = 'fail.mp3'; // 替换为失败音乐文件  
+                bgMusic.play();
+            }
+        }
+
+        function clearOutput() {
+            const outputElement = document.getElementById('output');
+            while (outputElement.firstChild) {
+                outputElement.removeChild(outputElement.firstChild);
+            }
+        }
+
+        document.getElementById('startButton').addEventListener('click', function () {
+            this.style.display = 'none'; // 点击后隐藏按钮  
+            document.getElementById('output').style.display = 'block'; // 显示输出区域  
+            findTreasureWithAsyncAwait();
+        });
+
+    </script>
+
+</body>
+
+</html>
